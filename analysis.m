@@ -22,7 +22,7 @@ function varargout = analysis(varargin)
 
 % Edit the above text to modify the response to help analysis
 
-% Last Modified by GUIDE v2.5 15-Jul-2021 19:41:14
+% Last Modified by GUIDE v2.5 13-Jun-2022 18:54:51
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -72,12 +72,11 @@ function varargout = analysis_OutputFcn(~, ~, handles)
 % Get default command line output from handles structure
 varargout{1} = handles.output;
 
-
 % --- Executes on slider movement.
 function slider1_Callback(hObject, eventdata, handles)
 global handles_MainWindow;
 global choice;
-global Xmin Xmax Zmin Zmax;
+global Xmin Xmax Zmin Zmax time_step time_end;
 global U W T PNH;
 global X Z V;
 % hObject    handle to slider1 (see GCBO)
@@ -86,8 +85,10 @@ global X Z V;
 
 % Hints: get(hObject,'Value') returns position of slider
 %        get(hObject,'Min') and get(hObject,'Max') to determine range of slider
-
+set(handles.slider1, 'Max',time_end);
+set(handles.slider1, 'Min', 0);
 time = round(get(handles.slider1,'Value'));
+
 [handles_MainWindow.X, handles_MainWindow.Z] = meshgrid (X,Z);
 axes(handles.axes1);
 switch choice
@@ -111,10 +112,11 @@ end
     handles_MainWindow.cb = colorbar;
     axis([Xmin,Xmax,Zmin,Zmax]);
     xlabel ('X, m'); 
-    ylabel ('Z, m'); 
-    title ([choice,', t = ' num2str(time * 0.125) ' sec']);
+    ylabel ('Y, m'); 
+    title ([choice,', t = ' num2str(time * time_step) ' sec']);
     title (handles_MainWindow.cb, handles_MainWindow.title);
     set(gcf,'PaperPositionMode','auto');
+    handles_MainWindow.F = gcf;
     hold off;
     drawnow;
 
@@ -232,13 +234,17 @@ end
 
 % --- Executes on button press in pushbutton1.
 function pushbutton1_Callback(hObject, eventdata, handles)
+global handles_MainWindow
 % hObject    handle to pushbutton1 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-global handles_MainWindow;
-    [filename, pathname] = uiputfile({'*.mat'},'Save as');
-    F = handles_MainWindow.F;
-    save([pathname filename], 'F');
+    [filename, pathname] = uiputfile({'*.jpeg'},'Save as');
+%      p.f = getframe(handles.axes1);
+f = handles_MainWindow.F;
+     p.im = frame2im(f);
+     [p.gif, p.map] = rgb2ind(p.im, 256);
+    imwrite(p.gif, p.map, [pathname filename])
+
 
 
 function edit5_Callback(hObject, eventdata, handles)
@@ -268,11 +274,17 @@ function pushbutton2_Callback(hObject, eventdata, handles)
 % hObject    handle to pushbutton2 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-global X Z Xmin Xmax Zmin Zmax;
+global X Z Xmin Xmax Zmin Zmax time_end time_step;
 global T U W PNH;
+global handles_MainWindow;
 set(handles.edit5,'String', '');
-[FileName, PathName] = uigetfile('*.mat','Select the file with initial data(density, horizontal velocity)');
-    set(handles.edit5,'string', [PathName FileName]);
+[FileName, PathName] = uigetfile('*.mat','Select the file with initial data');
+set(handles.edit5,'string', [PathName FileName]);
+
+grid(handles.axes1,'on');
+grid(handles.axes2,'on');
+
+clear p
 p = load(FileName);
 T = p.T;
 U = p.U;
@@ -280,9 +292,12 @@ W = p.W;
 PNH = p.PNH;
  X = p.X;
  Z = p.Y;
+ time_end = size(T,3);
+ time_step = 0.00625%.0125;
  drho1 = (1022.56 - 997.87);
  T = 1022.56 - drho1/2 - T;
  T = T + 1022.56 - drho1/2; 
+ [handles_MainWindow.X, handles_MainWindow.Z] = meshgrid (X,Z);
  Xmin = round(min(X),3);
  Xmax = round(max(X),3);
  Zmin = round(min(Z),3);
@@ -297,8 +312,7 @@ PNH = p.PNH;
 % --- Executes on button press in radiobutton6.
 function radiobutton6_Callback(hObject, eventdata, handles)
 global potential
-global handles_MainWindow;
-global X Z T Xmin Xmax Zmin Zmax
+global X Z T Xmin Xmax Zmin Zmax time_end time_step
 global choice_
 % hObject    handle to radiobutton6 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -309,7 +323,6 @@ choice_ = 'Ep';
 x = unique(X);
 y = unique(Z);
 
-[X_ Z_] = meshgrid(x,y);
 step = (Xmax-Xmin)/700;
 xx_ = [Xmin : step : Xmax];
 for i = 1:700
@@ -323,12 +336,15 @@ for i = 1:200
 end
 
 fun2 = 9.81 * T .* Z';
-for i = 1 : 1031
+for i = 1 : time_end
     potential(i) = trapz(x_, trapz(y_, squeeze(fun2(:,:,i)), 2));
 end
 axes(handles.axes2);
-xx=1:1:1031;
-handles_MainWindow.E = plot(xx,potential);
+disp(size(X,3));
+xx=1:1:time_end;
+xx = xx*time_step;
+
+plot(xx,potential);
 ylabel ('E[Дж/м]'); 
 xlabel ('t(c)');
 grid on
@@ -342,23 +358,23 @@ function radiobutton2_Callback(hObject, eventdata, handles)
 % Hint: get(hObject,'Value') returns toggle state of radiobutton2
 global handles_MainWindow;
 global choice;
-global U X Z Xmin Xmax Zmin Zmax;
+global X Z U Xmin Xmax Zmin Zmax time_step;
 
 set(handles.slider1,'Value', 0);
 disp(get(handles.radiobutton6, 'Value'));
 choice = 'U';
 handles_MainWindow = handles;
-   [handles_MainWindow.X, handles_MainWindow.Z] = meshgrid (X, Z);
-    colormap jet;   
+colormap jet;   
     axes(handles.axes1);
+    [handles_MainWindow.X, handles_MainWindow.Z] = meshgrid (X, Z);
     pcolor(handles_MainWindow.X', handles_MainWindow.Z', U(:,:,1));
     shading interp;
     hold on;
     handles_MainWindow.cb = colorbar;
     axis([Xmin,Xmax,Zmin,Zmax]);
     xlabel ('X, m'); 
-    ylabel ('Z, m'); 
-    title ([choice, ',t = ' num2str( 0 * 0.125) ' sec']);
+    ylabel ('Y, m'); 
+    title ([choice, ',t = ' num2str( 0 * time_step) ' sec']);
     handles_MainWindow.title = 'm/c';
     title (handles_MainWindow.cb, 'm/c');
     set(gcf,'PaperPositionMode','auto');
@@ -374,7 +390,7 @@ function radiobutton3_Callback(hObject, eventdata, handles)
 % Hint: get(hObject,'Value') returns toggle state of radiobutton3
 global handles_MainWindow;
 global choice;
-global X Z W Xmin Xmax Zmin Zmax;
+global X Z W Xmin Xmax Zmin Zmax time_step;
 
 set(handles.slider1,'Value', 0);
 
@@ -382,6 +398,7 @@ choice = 'W';
 handles_MainWindow = handles;
    axes(handles.axes1);
    [handles_MainWindow.X, handles_MainWindow.Z] = meshgrid (X, Z);
+
     colormap jet;
     pcolor(handles_MainWindow.X', handles_MainWindow.Z', W(:,:,1));
     shading interp;
@@ -389,8 +406,8 @@ handles_MainWindow = handles;
     handles_MainWindow.cb = colorbar;
     axis([Xmin,Xmax,Zmin,Zmax]);
     xlabel ('X, m'); 
-    ylabel ('Z, m'); 
-    title ([choice, ',t = ' num2str( 0 * 0.125) ' sec']);
+    ylabel ('Y, m'); 
+    title ([choice, ',t = ' num2str( 0 * time_step) ' sec']);
     handles_MainWindow.title = 'm/c';
     title (handles_MainWindow.cb, 'm/c');
     set(gcf,'PaperPositionMode','auto');
@@ -401,7 +418,7 @@ handles_MainWindow = handles;
 function radiobutton4_Callback(hObject, eventdata, handles)
 global handles_MainWindow;
 global choice;
-global X Z PNH Xmin Xmax Zmin Zmax;
+global X Z PNH Xmin Xmax Zmin Zmax time_step;
 % hObject    handle to radiobutton4 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
@@ -411,7 +428,8 @@ set(handles.slider1,'Value', 0);
 choice = 'PNH';
 handles_MainWindow = handles;
    axes(handles.axes1);
-   [handles_MainWindow.X, handles_MainWindow.Z] = meshgrid (X,Z);
+   [handles_MainWindow.X, handles_MainWindow.Z] = meshgrid (X, Z);
+
     colormap jet;
     pcolor(handles_MainWindow.X', handles_MainWindow.Z', PNH(:,:,1));
     shading interp;
@@ -419,8 +437,8 @@ handles_MainWindow = handles;
     handles_MainWindow.cb = colorbar;
     axis([Xmin,Xmax,Zmin,Zmax]);
     xlabel ('X, m'); 
-    ylabel ('Z, m'); 
-    title ([choice ,', t = ' num2str( 1 * 0.125) ' sec']);
+    ylabel ('Y, m'); 
+    title ([choice ,', t = ' num2str( 0 * time_step) ' sec']);
     handles_MainWindow.title = 'H/m';
     title (handles_MainWindow.cb, 'H/m');
     set(gcf,'PaperPositionMode','auto');
@@ -437,7 +455,7 @@ function radiobutton1_Callback(hObject, eventdata, handles)
 % Hint: get(hObject,'Value') returns toggle state of radiobutton1
 global handles_MainWindow;
 global choice;
-global X Z T Xmin Xmax Zmin Zmax;
+global T X Z Xmin Xmax Zmin Zmax time_step;
 
 set(handles.slider1,'Value', 0);
 
@@ -447,15 +465,15 @@ axes(handles.axes1);
 [handles_MainWindow.X, handles_MainWindow.Z] = meshgrid (X, Z);
 
     colormap jet;
-    handles_MainWindow.F = pcolor(handles_MainWindow.X', handles_MainWindow.Z', T(:,:,1));
+    pcolor(handles_MainWindow.X', handles_MainWindow.Z', T(:,:,1));
     shading interp;
     hold on;
     caxis([990 1022]);
     handles_MainWindow.cb = colorbar;
     axis([Xmin,Xmax,Zmin,Zmax]);
     xlabel ('X, m'); 
-    ylabel ('Z, m'); 
-    title ([choice,', t = ' num2str( 0 * 0.125) ' sec']);
+    ylabel ('Y, m'); 
+    title ([choice,', t = ' num2str( 0 * time_step) ' sec']);
     handles_MainWindow.title = 'kg/m^3';
     title (handles_MainWindow.cb, 'kg/m^3');
     set(gcf,'PaperPositionMode','auto');
@@ -466,8 +484,7 @@ axes(handles.axes1);
 % --- Executes on button press in radiobutton5.
 function radiobutton5_Callback(hObject, eventdata, handles)
 global kinetic
-global handles_MainWindow
-global X Z  T U W Xmin Xmax Zmin Zmax
+global X Z  T U W Xmin Xmax Zmin Zmax time_end time_step
 global choice_
 
 % hObject    handle to radiobutton5 (see GCBO)
@@ -480,7 +497,6 @@ x = unique(X);
 y = unique(Z);
 
 axes(handles.axes2);
-[X_ , Z_] = meshgrid(x,y);
 step = (Xmax-Xmin)/700;
 xx_ = [Xmin : step : Xmax];
 for i = 1:700
@@ -493,21 +509,23 @@ for i = 1:200
     y_(i) = yy_(i);
 end
 fun = T .* (U.^2 + W.^2);
-for i = 1 : 1031
+for i = 1 : time_end
     kinetic(i) = trapz(x_, trapz(y_, squeeze(fun(:,:,i)), 2));
 end
 
+
+xx=1:1:time_end;
+xx = xx*time_step;
+plot(xx,kinetic);
 ylabel ('E[Дж/м]'); 
 xlabel ('t(c)');
-xx=1:1:1031;
-handles_MainWindow.E = plot(xx,kinetic);
 grid on
 
 % --- Executes on button press in radiobutton7.
 function radiobutton7_Callback(hObject, eventdata, handles)
 global ape
 global handles_MainWindow;
-global T X Z Xmin Xmax Zmin Zmax
+global T X Z Xmin Xmax Zmin Zmax time_end time_step
 global choice_
 % hObject    handle to radiobutton7 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -519,7 +537,6 @@ x = unique(X);
 z = unique(Z);
 
 axes(handles.axes2);
-[X_ Z_] = meshgrid(x,z);
 step = (Xmax-Xmin)/700;
 xx_ = [Xmin : step : Xmax];
 for i = 1:700
@@ -533,14 +550,16 @@ for i = 1:200
 end
 
 fun3 = 9.81 * (T - T(:,:,1)).*z';
-for i = 1 : 1031
+for i = 1 : time_end
     ape(i) = trapz(x_, trapz(y_, squeeze(fun3(:,:,i)), 2));
 end
 
+
+xx=1:1:time_end;
+xx = xx*time_step;
+handles_MainWindow.E = plot(xx,ape);
 ylabel ('E[Дж/м]'); 
 xlabel ('t(c)');
-xx=1:1:1031;
-handles_MainWindow.E = plot(xx,ape);
 grid on
 
 % --- Executes on button press in pushbutton3.
@@ -549,9 +568,11 @@ function pushbutton3_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 global handles_MainWindow;
-    [filename, pathname] = uiputfile({'*.mat'},'Save as');
-    E = handles_MainWindow.E;
-    save([pathname filename], 'E');
+    [filename, pathname] = uiputfile({'*.jpeg'},'Save as');
+     p.f = getframe(handles.axes2);
+     p.im = frame2im(p.f);
+     [p.gif, p.map] = rgb2ind(p.im, 256);
+    imwrite(p.gif, p.map, [pathname filename])
 
 
 % --- Executes on button press in checkbox1.
@@ -560,7 +581,7 @@ global ape kinetic potential
 global choice_ choice
 global  X Z T U W PNH
 global handles_MainWindow
-global Xmin Xmax Zmin Zmax
+global Xmin Xmax Zmin Zmax time_end time_step
 % hObject    handle to checkbox1 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
@@ -586,7 +607,8 @@ switch choice_
 end
 ymin = min(e);
 ymax = max(e);
-x = [1:1:1031];
+x = 0:1:time_end;
+x = x*time_step;
 
 if get(hObject,'Value') == 1
     
@@ -595,7 +617,8 @@ if get(hObject,'Value') == 1
       
    [handles_MainWindow.X, handles_MainWindow.Z] = meshgrid (X, Z);
    
-   for i = 1:size(V, 3) 
+   step = round((time_end+1)/16);
+   for i = 1:step:time_end - 6
       axes(handles.axes1);
       colormap jet;
       pcolor(handles_MainWindow.X', handles_MainWindow.Z', V(:,:,i));
@@ -608,21 +631,22 @@ if get(hObject,'Value') == 1
       axis([Xmin,Xmax,Zmin,Zmax]);
       xlabel ('X, m'); 
       ylabel ('Z, m'); 
-      title ([choice,', t = ' num2str(i * 0.125) ' sec']);
+      title ([choice,', t = ' num2str(round(i * time_step,3)), ' sec']);
       title (handles_MainWindow.cb, handles_MainWindow.title);
       set(gcf,'PaperPositionMode','auto');
+      handles_MainWindow.F = getframe;
       hold off;
       drawnow;
       if get(hObject,'Value') == 0
         break;
       end
     
-    if i ~= 1030
+    if i ~= time_end - 1
        axes(handles.axes2)
-       axis([1 1031 ymin ymax]);
+       axis([0 time_end*time_step ymin ymax]);
        hold on;
        grid on
-       plot([x(i) x(i+1)],[e(i) e(i+1)],'b','LineWidth', 2);
+       plot([x(i) x(i+step)],[e(i) e(i+step)],'b','LineWidth', 2);
        hold off
        ylabel ('E[Дж/м]'); 
        xlabel ('t(c)');
@@ -633,7 +657,7 @@ end
 
 % --- Executes on button press in pushbutton4.
 function pushbutton4_Callback(hObject, eventdata, handles)
-global Xmin Xmax Zmin Zmax
+global Xmin Xmax Zmin Zmax 
 global X Z
 % hObject    handle to pushbutton4 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -648,6 +672,7 @@ global X Z
  set(handles.edit4,'String', Zmax);
  cla(handles.axes1,'reset');
  cla(handles.axes2,'reset');
+ grid(handles.axes1,'on');
+ grid(handles.axes2,'on');
  set(handles.checkbox1,'Value',0);
  set(handles.slider1,'Value',0);
- 
